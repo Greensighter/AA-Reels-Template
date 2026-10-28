@@ -2,24 +2,25 @@ import React, { useMemo } from 'react';
 import { Easing, interpolate } from 'remotion';
 import { measureText } from '@remotion/layout-utils';
 import { DISPLAY_FONT } from './fonts';
-import { ACCENT_RED, TAG_RED, TEXT_WIDTH, type TemplateSpec } from './templates';
+import { ACCENT_RED, TAG_RED, TEXT_WIDTH } from './templates';
 import { WORD_BLUR, WORD_IN } from './timing';
-import type { PhraseTiming } from './schema';
+import type { WordTiming } from './schema';
 
 // From Figma: Barlow Condensed SemiBold, uppercase, line-height 0.8, tracking -3%.
 const LINE = 0.8;
 const TRACKING_EM = -0.03;
-const MAX_LINES = 4;
-const MIN_SIZE = 90;
-// Tag: red pill, 24 px radius, 24/16 px padding, rotated -7.48 deg, on its own line.
+// Tag: red pill, rotated -7.48 deg, on its own line. Sizes are in em so the tag
+// shrinks with the text (Figma at 164 px: 24 px radius, 24/16 px padding).
 const TAG_ROTATE = -7.48;
-const TAG_PAD_X = 24;
-const TAG_PAD_Y = 16;
-const TAG_SLOT = 0.99; // height of the tag's line, in em (Figma: tag top to text top = 163 px at 164 px)
+const TAG_PAD_X = 24 / 164;
+const TAG_PAD_Y = 16 / 164;
+const TAG_RADIUS = 24 / 164;
+const TAG_SLOT = 0.99; // height of the tag's line (Figma: tag top to text top = 163 px at 164 px)
 const TAG_DROP = 0.14; // tag sits lower than its slot, overlapping the next line (Figma: ~46 px)
 
 type Word = { text: string; index: number };
 type Line = { accent: boolean; words: Word[] };
+export type TextLayout = { size: number; lines: Line[]; heightPx: number };
 
 const easeOut = Easing.out(Easing.cubic);
 const pop = Easing.bezier(0.34, 1.4, 0.64, 1);
@@ -34,16 +35,17 @@ function width(text: string, size: number): number {
   }).width;
 }
 
-/** Wraps words into lines. With tags, each run of accent words gets a line of its own. */
-function wrap(phrase: PhraseTiming, size: number, tags: boolean): Line[] | null {
+/** Wraps words into lines. With tags, each run of accent words gets a line of its own. Null if a word can't fit. */
+function wrap(words: WordTiming[], size: number, tags: boolean): Line[] | null {
   const space = width(' ', size);
   const lines: Line[] = [];
   let cur: Line | null = null;
   let curW = 0;
-  phrase.words.forEach((w, index) => {
+  for (let index = 0; index < words.length; index++) {
+    const w = words[index];
     const isTag = tags && !!w.accent;
-    const ww = width(w.text, size) + (isTag ? TAG_PAD_X * 2 : 0);
-    if (ww > TEXT_WIDTH) throw new Error('too wide');
+    const ww = width(w.text, size) + (isTag ? TAG_PAD_X * 2 * size : 0);
+    if (ww > TEXT_WIDTH) return null;
     const sameKind = cur && cur.accent === isTag;
     const next = sameKind && cur!.words.length ? curW + space + ww : ww;
     if (!cur || !sameKind || next > TEXT_WIDTH) {
@@ -54,45 +56,57 @@ function wrap(phrase: PhraseTiming, size: number, tags: boolean): Line[] | null 
       curW = next;
     }
     cur.words.push({ text: w.text, index });
-  });
+  }
   return lines;
 }
 
-function fit(phrase: PhraseTiming, base: number, tags: boolean): { size: number; lines: Line[] } {
-  for (let size = base; size >= MIN_SIZE; size -= 4) {
-    try {
-      const lines = wrap(phrase, size, tags);
-      const height = lines!.reduce((h, l) => h + (l.accent ? TAG_SLOT : LINE), 0);
-      if (lines && height <= MAX_LINES * LINE + 0.3) return { size, lines };
-    } catch {
-      /* a word is too wide at this size: try smaller */
-    }
+const heightEm = (lines: Line[]) => lines.reduce((h, l) => h + (l.accent ? TAG_SLOT : LINE), 0);
+
+/**
+ * Largest size from `max` down to `min` at which the words fit: within
+ * `maxHeightPx` (static), or within `maxLines` lines (one phrase per screen).
+ */
+export function fitText(
+  words: WordTiming[],
+  opts: { max: number; min: number; tags: boolean; maxHeightPx?: number; maxLines?: number },
+): TextLayout {
+  for (let size = opts.max; size >= opts.min; size -= 2) {
+    const lines = wrap(words, size, opts.tags);
+    if (!lines) continue;
+    const h = heightEm(lines) * size;
+    const fitsHeight = opts.maxHeightPx === undefined || h <= opts.maxHeightPx;
+    const fitsLines = opts.maxLines === undefined || heightEm(lines) <= opts.maxLines * LINE + 0.3;
+    if (fitsHeight && fitsLines) return { size, lines, heightPx: h };
   }
-  return { size: MIN_SIZE, lines: wrap(phrase, MIN_SIZE, false) ?? [] };
+  const lines = wrap(words, opts.min, false) ?? [{ accent: false, words: words.map((w, index) => ({ text: w.text, index })) }];
+  return { size: opts.min, lines, heightPx: heightEm(lines) * opts.min };
 }
 
 /** 0 -> 1 entrance progress for something that starts at `start`. */
-const enter = (t: number, start: number, dur = WORD_IN) =>
+const enter = (t: number, start: number, dur: number) =>
   interpolate(t, [start, start + dur], [0, 1], { extrapolateLeft: 'clamp', extrapolateRight: 'clamp' });
 
-export const PhraseText: React.FC<{
-  phrase: PhraseTiming;
-  spec: TemplateSpec;
-  /** Current time in seconds. */
+/**
+ * Draws laid-out words. Each word blurs in at its own `start`; the whole block
+ * blurs out with `out` (0 = shown, 1 = gone).
+ */
+export const TextBlock: React.FC<{
+  words: WordTiming[];
+  layout: TextLayout;
+  centerY: number;
+  accent: 'tag' | 'color';
   t: number;
-  /** 0 = fully shown, 1 = fully gone (the phrase's blur-out). */
   out: number;
-}> = ({ phrase, spec, t, out }) => {
-  const tags = spec.accent === 'tag';
-  const { size, lines } = useMemo(() => fit(phrase, spec.fontSize, tags), [phrase, spec.fontSize, tags]);
-
+  inDuration?: number;
+}> = ({ words, layout, centerY, accent, t, out, inDuration = WORD_IN }) => {
+  const { size, lines } = layout;
   const outE = easeOut(out);
   return (
     <div
       style={{
         position: 'absolute',
         left: '50%',
-        top: spec.textCenterY,
+        top: centerY,
         width: TEXT_WIDTH,
         transform: `translate(-50%, -50%) translateY(${-14 * outE}px)`,
         opacity: 1 - outE,
@@ -109,12 +123,12 @@ export const PhraseText: React.FC<{
     >
       {lines.map((line, li) =>
         line.accent ? (
-          <Tag key={li} line={line} phrase={phrase} t={t} size={size} />
+          <Tag key={li} line={line} start={words[line.words[0].index].start} t={t} size={size} inDuration={inDuration} />
         ) : (
           <div key={li} style={{ whiteSpace: 'nowrap', height: size * LINE }}>
             {line.words.map(({ text, index }, wi) => {
-              const p = easeOut(enter(t, phrase.words[index].start));
-              const accent = !tags && phrase.words[index].accent;
+              const p = easeOut(enter(t, words[index].start, inDuration));
+              const red = accent === 'color' && words[index].accent;
               return (
                 <React.Fragment key={index}>
                   {wi > 0 ? ' ' : null}
@@ -124,7 +138,7 @@ export const PhraseText: React.FC<{
                       opacity: p,
                       filter: p < 1 ? `blur(${WORD_BLUR * (1 - p)}px)` : undefined,
                       transform: `translateY(${(1 - p) * 18}px)`,
-                      color: accent ? ACCENT_RED : undefined,
+                      color: red ? ACCENT_RED : undefined,
                     }}
                   >
                     {text}
@@ -142,10 +156,15 @@ export const PhraseText: React.FC<{
 /** Tag wording: the accent words without trailing punctuation (the tag never ends in a comma). */
 const tagText = (line: Line) => line.words.map((w) => w.text).join(' ').replace(/[,.;:!?]+$/, '');
 
-/** A run of accent words in the red rotated tag. It pops in with the first word. */
-const Tag: React.FC<{ line: Line; phrase: PhraseTiming; t: number; size: number }> = ({ line, phrase, t, size }) => {
-  const start = phrase.words[line.words[0].index].start;
-  const p = enter(t, start, WORD_IN + 0.1);
+/** A run of accent words in the red rotated tag. It pops in with its first word. */
+const Tag: React.FC<{ line: Line; start: number; t: number; size: number; inDuration: number }> = ({
+  line,
+  start,
+  t,
+  size,
+  inDuration,
+}) => {
+  const p = enter(t, start, inDuration + 0.1);
   const e = easeOut(p);
   const scale = interpolate(pop(p), [0, 1], [0.82, 1]);
   const rotate = interpolate(e, [0, 1], [TAG_ROTATE + 6, TAG_ROTATE]);
@@ -155,8 +174,8 @@ const Tag: React.FC<{ line: Line; phrase: PhraseTiming; t: number; size: number 
         style={{
           display: 'inline-flex',
           background: TAG_RED,
-          borderRadius: 24,
-          padding: `${TAG_PAD_Y}px ${TAG_PAD_X}px`,
+          borderRadius: TAG_RADIUS * size,
+          padding: `${TAG_PAD_Y * size}px ${TAG_PAD_X * size}px`,
           whiteSpace: 'nowrap',
           opacity: e,
           filter: p < 1 ? `blur(${WORD_BLUR * (1 - e)}px)` : undefined,
@@ -179,3 +198,10 @@ const Tag: React.FC<{ line: Line; phrase: PhraseTiming; t: number; size: number 
     </div>
   );
 };
+
+/** Memoised layout helper for components. */
+export function useFit(words: WordTiming[], opts: Parameters<typeof fitText>[1]): TextLayout {
+  const key = JSON.stringify([words.map((w) => [w.text, !!w.accent]), opts]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  return useMemo(() => fitText(words, opts), [key]);
+}

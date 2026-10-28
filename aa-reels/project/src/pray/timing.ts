@@ -30,14 +30,25 @@ export function parsePhrase(phrase: string): { text: string; accent: boolean }[]
 export const spokenText = (phrase: string) => phrase.replace(/\*/g, '');
 
 /**
- * Without a voiceover, words follow a calm reading pace and each phrase stays
- * up long enough to read (about 2.5 words per second, at least 2.4 seconds).
+ * Without a voiceover:
+ * - template 1: words follow a calm reading pace and each line stays up long
+ *   enough to read (about 2.5 words per second, at least 2.4 seconds);
+ * - template 2 (static): the whole prayer stays up for its reading time
+ *   (about 2.5 words per second, at least 6 seconds).
  */
-export function timingWithoutVoice(props: PrayProps): VoiceTiming {
+export function timingWithoutVoice(props: PrayProps, mode: 'phrases' | 'static' = 'phrases'): VoiceTiming {
   const { leadInSeconds, tailSeconds } = props.voice;
   const step = 0.22;
   const gap = 0.7;
   let t = leadInSeconds;
+  if (mode === 'static') {
+    const phrases: PhraseTiming[] = props.phrases.map((text) => {
+      const words = parsePhrase(text).map((w) => ({ ...w, start: t, end: t }));
+      return { text, start: t, end: t, words };
+    });
+    const count = phrases.reduce((n, p) => n + p.words.length, 0);
+    return { durationSeconds: Math.max(6, leadInSeconds + count * 0.4 + tailSeconds), phrases };
+  }
   const phrases: PhraseTiming[] = props.phrases.map((text) => {
     const words = parsePhrase(text);
     const hold = Math.max(2.4, words.length * 0.42 + 0.8);

@@ -1,6 +1,6 @@
 # Making prayer reels with Claude
 
-Claude can turn your prayer and a photo or video into a finished vertical
+Claude can turn your prayer and your photos or videos into a finished vertical
 video for TikTok, Instagram Reels or YouTube Shorts.
 
 ## One-time setup (5 minutes)
@@ -17,8 +17,8 @@ video for TikTok, Instagram Reels or YouTube Shorts.
 ## Making a video
 
 1. Start a **new chat** and type: **Make a prayer reel**.
-2. Claude shows you the three templates and a short form. Copy the form, fill
-   it in, and attach your photo or video:
+2. Claude shows you the two templates and a short form. Copy the form, fill
+   it in, and attach your photos or videos:
 
 ```
 Template: 1
@@ -38,11 +38,16 @@ Media Assets: Image
 
 ## Tips
 
+- **Two templates:** Template 1 shows the prayer line by line, as it's spoken.
+  Template 2 shows the whole prayer at once.
 - **Verse first:** put the verse reference on the first line (for example,
   *Psalm 85:6*).
-- **One line = one screen.** Short lines of 3 to 8 words look best.
+- **Template 1: one line = one screen.** Short lines of 3 to 8 words look best.
+  Longer lines are split for you; your words are never changed.
 - **Highlight a word** by putting stars around it: `*revive*`. It appears in
   the red tag.
+- **Several photos or videos?** Attach them all; they take turns in the video,
+  in order.
 - **Vertical photos and videos** look best. Horizontal ones get cropped to the
   middle.
 - **Want a change?** Just ask, for example: "Use Template 2", "Male voice",

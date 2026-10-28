@@ -4,6 +4,7 @@ import { getVideoMetadata } from '@remotion/media-utils';
 import { isVideo, PrayScripture, PrayInternalProps } from './pray/PrayScripture';
 import { praySchema, TIMING_FILE, VOICE_FILE, type PrayProps, type VoiceTiming } from './pray/schema';
 import { timingMatches, timingWithoutVoice } from './pray/timing';
+import { TEMPLATES } from './pray/templates';
 
 const FPS = 30;
 
@@ -13,7 +14,7 @@ const sample: PrayProps = {
   reference: 'Psalm 85:6',
   label: 'Pray the scriptures',
   phrases: ['Your faith may feel weak,', 'Lord, *revive* us again,', 'Amen.'],
-  background: 'media/background.jpg',
+  backgrounds: ['media/bg-1.jpg'],
   overlay: 0.48,
   zoom: 1.08,
   voice: { name: 'af_heart', speed: 0.76, leadInSeconds: 1.0, gapSeconds: 1.2, tailSeconds: 2.2 },
@@ -33,12 +34,14 @@ const calculatePrayMetadata: CalculateMetadataFunction<PrayInternalProps> = asyn
     if (timingMatches(loaded, props)) timing = loaded;
   }
   const hasVoice = !!timing;
-  timing = timing ?? timingWithoutVoice(props);
-  let videoFrames: number | undefined;
-  if (files.includes(props.background) && isVideo(props.background)) {
-    const meta = await getVideoMetadata(staticFile(props.background));
-    videoFrames = Math.floor(meta.durationInSeconds * FPS);
-  }
+  timing = timing ?? timingWithoutVoice(props, TEMPLATES[props.template]?.mode ?? 'phrases');
+  const videoFrames = await Promise.all(
+    props.backgrounds.map(async (src) =>
+      files.includes(src) && isVideo(src)
+        ? Math.floor((await getVideoMetadata(staticFile(src))).durationInSeconds * FPS)
+        : null,
+    ),
+  );
   return {
     durationInFrames: Math.ceil(timing.durationSeconds * FPS),
     props: { ...props, timing, hasVoice, videoFrames },

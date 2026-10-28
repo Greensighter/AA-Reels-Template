@@ -1,18 +1,19 @@
 #!/usr/bin/env python3
 """Make an Awake America prayer reel (AA Reels) in one command.
 
-    python3 make_reel.py --spec prayer.json --background /path/to/photo-or-video [--out reel.mp4]
+    python3 make_reel.py --spec prayer.json --background photo-or-video [more files...] [--out reel.mp4]
 
 prayer.json holds the intake answers:
     {
-      "template": 1,                 # 1, 2 or 3
+      "template": 1,                 # 1 = line by line, 2 = whole prayer at once
       "voiceover": true,             # false = no voice
       "music": true,                 # false = no music
       "voice": "female",             # "female" / "male" (or a Kokoro voice id)
       "reference": "Psalm 85:6",     # as the user typed it
       "phrases": ["Your faith may feel weak,", "Lord, *revive* us again,", "Amen."]
     }
-One phrase per screen; *stars* mark accent words (red tag in templates 1 and 3).
+One phrase per screen in template 1; *stars* mark accent words (the red tag).
+Several --background files take turns with a crossfade (photos and videos can be mixed).
 Optional keys: "label" (default "Pray the scriptures"), "speed" (0.6-1.0), "seed" (music
 variation), "overlay", "zoom", "musicVolume".
 
@@ -53,6 +54,9 @@ DEFAULTS = {
     "musicVolume": 0.22,
     "voice": {"name": "af_heart", "speed": 0.76, "leadInSeconds": 1.0, "gapSeconds": 1.2, "tailSeconds": 2.2},
 }
+# Template number -> how the prayer appears (must match project/src/pray/templates.ts).
+TEMPLATES = {1: "phrases", 2: "static"}
+
 # "Voice: Male/Female" from the intake -> Kokoro voices (any Kokoro voice id also works).
 VOICES = {"female": "af_heart", "male": "am_michael"}
 
@@ -244,17 +248,26 @@ def loudnorm_filter(ff: str, media: Path) -> str:
 # ---------------------------------------------------------------- media + config
 
 
-def place_background(src: Path | None) -> str:
+MAX_BACKGROUNDS = 10
+
+
+def place_backgrounds(sources: list[Path]) -> list[str]:
+    """Copies the user's photos/videos into the project, in order. Returns their public/ paths."""
     media = PROJECT / "public" / "media"
     shutil.rmtree(media, ignore_errors=True)
     media.mkdir(parents=True)
-    if not src:
-        return "media/none"
+    if len(sources) > MAX_BACKGROUNDS:
+        log(f"Note: using the first {MAX_BACKGROUNDS} of {len(sources)} files.")
+        sources = sources[:MAX_BACKGROUNDS]
+    return [place_one(src, media, i + 1) for i, src in enumerate(sources)]
+
+
+def place_one(src: Path, media: Path, n: int) -> str:
     if not src.exists():
         raise SetupError(f"Background file not found: {src}")
     ext = src.suffix.lower()
     if ext in VIDEO_EXT:
-        dest = media / f"background{ext}"
+        dest = media / f"bg-{n}{ext}"
         shutil.copy(src, dest)
         return f"media/{dest.name}"
     # Images: normalise anything (HEIC, huge PNGs, odd colour modes) to a 2160px-tall JPEG.
@@ -264,23 +277,20 @@ def place_background(src: Path | None) -> str:
         if ext in (".heic", ".heif"):
             try:
                 import pillow_heif  # type: ignore
-
-                pillow_heif.register_heif_opener()
             except ImportError:
                 ensure_pip("pillow-heif")
                 import pillow_heif  # type: ignore
-
-                pillow_heif.register_heif_opener()
+            pillow_heif.register_heif_opener()
         im = ImageOps.exif_transpose(Image.open(src)).convert("RGB")
     except Exception as e:  # noqa: BLE001
         raise SetupError(f"Couldn't open the background image {src.name}: {e}")
     if im.height > 2160:
         im = im.resize((round(im.width * 2160 / im.height), 2160), Image.LANCZOS)
     if im.width < 700:
-        log(f"Note: the image is only {im.width}px wide; it will look soft at 1080px. A larger image looks sharper.")
-    dest = media / "background.jpg"
+        log(f"Note: {src.name} is only {im.width}px wide; it will look soft at 1080px. A larger image looks sharper.")
+    dest = media / f"bg-{n}.jpg"
     im.save(dest, quality=92)
-    return "media/background.jpg"
+    return f"media/{dest.name}"
 
 
 def ensure_pip(pkg: str) -> None:
@@ -291,10 +301,10 @@ def ensure_pip(pkg: str) -> None:
         run(base, quiet=True)
 
 
-def build_props(spec: dict, background: str, voice_override: str | None) -> dict:
+def build_props(spec: dict, backgrounds: list[str], voice_override: str | None) -> dict:
     """Turns the intake answers (spec) into the video's props.
 
-    spec keys: template (1-3), reference, phrases, voiceover (bool), voice ("male"/"female"
+    spec keys: template (1-2), reference, phrases, voiceover (bool), voice ("male"/"female"
     or a Kokoro id). Optional: label, speed, seed, overlay, zoom, musicVolume.
     """
     phrases = [p.strip() for p in spec["phrases"] if p and p.strip()]
@@ -303,26 +313,120 @@ def build_props(spec: dict, background: str, voice_override: str | None) -> dict
     try:
         template = int(spec.get("template", 1))
     except (TypeError, ValueError):
-        raise SetupError("template must be 1, 2 or 3.")
-    if template not in (1, 2, 3):
-        raise SetupError("template must be 1, 2 or 3.")
+        raise SetupError(f"template must be one of: {', '.join(map(str, TEMPLATES))}.")
+    if template not in TEMPLATES:
+        raise SetupError(f"template must be one of: {', '.join(map(str, TEMPLATES))}.")
     voice = dict(DEFAULTS["voice"])
     name = str(voice_override or spec.get("voice") or "female").strip()
     voice["name"] = VOICES.get(name.lower(), name)
     if spec.get("speed"):
         voice["speed"] = float(spec["speed"])
+    if TEMPLATES[template] == "static":
+        voice["gapSeconds"] = 0.55  # the whole prayer is read in one go
+    else:
+        split = split_for_screens(phrases)
+        if split != phrases:
+            log(f"Long lines split into {len(split)} screens (words unchanged):")
+            for i, line in enumerate(split, 1):
+                print(f"    {i}. {line}", flush=True)
+            phrases = split
     return {
         "template": template,
         "reference": str(spec.get("reference", "")).strip(),
         "label": spec.get("label", DEFAULTS["label"]),
         "phrases": phrases,
-        "background": background,
+        "backgrounds": backgrounds,
         "overlay": float(spec.get("overlay", DEFAULTS["overlay"])),
         "zoom": float(spec.get("zoom", DEFAULTS["zoom"])),
         "voice": voice,
         "music": "audio/pray/music.wav",
         "musicVolume": float(spec.get("musicVolume", DEFAULTS["musicVolume"])),
     }
+
+
+MAX_WORDS_PER_SCREEN = 9
+
+
+def _tokens_safe_breaks(tokens: list[str]) -> list[bool]:
+    """breakable[i] is True if a screen may end after token i (never inside *stars*)."""
+    out, inside = [], False
+    for tok in tokens:
+        if tok.startswith("*"):
+            inside = True
+        if re.sub(r"[,.;:!?\"')\]]+$", "", tok).endswith("*"):
+            inside = False
+        out.append(not inside)
+    return out
+
+
+def _split_at(tokens: list[str], pattern: str) -> list[list[str]]:
+    """Splits after tokens matching `pattern` (punctuation at the end of a word)."""
+    safe = _tokens_safe_breaks(tokens)
+    parts, cur = [], []
+    for i, tok in enumerate(tokens):
+        cur.append(tok)
+        if safe[i] and re.search(pattern, tok.replace("*", "")) and i < len(tokens) - 1:
+            parts.append(cur)
+            cur = []
+    if cur:
+        parts.append(cur)
+    return parts
+
+
+def _balanced(tokens: list[str], limit: int) -> list[list[str]]:
+    """Evenly sized chunks of at most `limit` words, moving cuts out of *star* groups."""
+    k = -(-len(tokens) // limit)
+    size = -(-len(tokens) // k)
+    safe = _tokens_safe_breaks(tokens)
+    chunks, start = [], 0
+    joiners = {"and", "but", "or", "so", "that", "for", "when", "because", "who", "with", "in", "to", "as", "if"}
+    while start < len(tokens):
+        end = min(len(tokens), start + size)
+        if end < len(tokens):
+            # Prefer to start the next screen with a joining word ("... / and I shall"), within 2 words.
+            for d in (0, -1, 1, -2, 2):
+                e = end + d
+                if start + 2 <= e < len(tokens) and e - start <= limit and safe[e - 1] \
+                        and tokens[e].strip("*\"'(").lower() in joiners:
+                    end = e
+                    break
+        while end < len(tokens) and not safe[end - 1]:
+            end += 1
+        chunks.append(tokens[start:end])
+        start = end
+    return chunks
+
+
+def _pack(pieces: list[list[str]], limit: int) -> list[list[str]]:
+    """Joins neighbouring pieces while they fit on one screen."""
+    out: list[list[str]] = []
+    for piece in pieces:
+        if out and len(out[-1]) + len(piece) <= limit and not re.search(r"[.!?][\"')\]]*$", out[-1][-1].replace("*", "")):
+            out[-1] = out[-1] + piece
+        else:
+            out.append(piece)
+    return out
+
+
+def split_for_screens(lines: list[str], limit: int = MAX_WORDS_PER_SCREEN) -> list[str]:
+    """Template 1 shows one line per screen. Long lines (e.g. a whole prayer pasted on
+    one line) are split, without changing any words: first at sentence ends, then at
+    commas/semicolons/colons/dashes, and only then evenly. *Star* groups stay whole."""
+    screens: list[str] = []
+    for line in lines:
+        tokens = line.split()
+        if len(tokens) <= limit:
+            screens.append(line)
+            continue
+        for sentence in _split_at(tokens, r"[.!?][\"')\]]*$"):
+            if len(sentence) <= limit:
+                screens.append(" ".join(sentence))
+                continue
+            pieces = _split_at(sentence, r"([,;:]|—|–)[\"')\]]*$")
+            for chunk in _pack(pieces, limit):
+                parts = _balanced(chunk, limit) if len(chunk) > limit else [chunk]
+                screens.extend(" ".join(p) for p in parts)
+    return screens
 
 
 def slug(text: str) -> str:
@@ -344,7 +448,8 @@ def default_out(props: dict) -> Path:
 def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--spec", required=True, help="JSON with the intake answers (see top of file)")
-    ap.add_argument("--background", help="photo or video the user uploaded")
+    ap.add_argument("--background", nargs="+", default=[], metavar="FILE",
+                    help="one or more photos/videos the user uploaded, in order")
     ap.add_argument("--out", help="output .mp4 (default: /mnt/user-data/outputs/prayer-reel-<ref>.mp4)")
     ap.add_argument("--voice", help="male, female, or a Kokoro voice id (overrides the spec)")
     ap.add_argument("--no-voice", action="store_true")
@@ -376,8 +481,8 @@ def main() -> None:
     ff = ffmpeg_cmd()
     scripts = SKILL / "scripts"
 
-    background = place_background(Path(args.background) if args.background else None)
-    props = build_props(spec, background, args.voice)
+    backgrounds = place_backgrounds([Path(b) for b in args.background])
+    props = build_props(spec, backgrounds, args.voice)
     (PROJECT / "pray.json").write_text(json.dumps(props, indent=2))
 
     audio = PROJECT / "public" / "audio" / "pray"
@@ -393,7 +498,10 @@ def main() -> None:
         # Same pace as timingWithoutVoice() in project/src/pray/timing.ts
         counts = [len(p.replace("*", "").split()) for p in props["phrases"]]
         v = props["voice"]
-        voice_len = v["leadInSeconds"] + sum(max(2.4, n * 0.42 + 0.8) for n in counts) + 0.7 * (len(counts) - 1) + v["tailSeconds"]
+        if TEMPLATES[props["template"]] == "static":
+            voice_len = max(6.0, v["leadInSeconds"] + sum(counts) * 0.4 + v["tailSeconds"])
+        else:
+            voice_len = v["leadInSeconds"] + sum(max(2.4, n * 0.42 + 0.8) for n in counts) + 0.7 * (len(counts) - 1) + v["tailSeconds"]
         log(f"No voiceover: {len(counts)} phrases, {sum(counts)} words.")
 
     if no_music:
@@ -414,8 +522,10 @@ def main() -> None:
 
     if args.still:
         still = out.with_suffix(".png")
-        # First phrase, fully revealed and not yet leaving.
-        if no_voice:
+        # First phrase, fully revealed and not yet leaving (static: the whole prayer, after it appears).
+        if TEMPLATES[props["template"]] == "static":
+            frame = int(2.0 * 30)
+        elif no_voice:
             n = len(props["phrases"][0].replace("*", "").split())
             frame = int((props["voice"]["leadInSeconds"] + 0.22 * n + 0.7) * 30)
         else:

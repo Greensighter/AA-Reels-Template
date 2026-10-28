@@ -3,24 +3,28 @@
 A Claude skill that makes **Awake America prayer reels**: vertical 1080×1920
 videos for TikTok, Instagram Reels and YouTube Shorts.
 
-The user opens a chat in Claude, fills in a short form and attaches a photo or
-video. Claude sends back a finished MP4:
+The user opens a chat in Claude, fills in a short form and attaches one or
+more photos or videos. Claude sends back a finished MP4 in the AA design (Figma
+"Universal Template - Variant 1"): the verse at the top, the prayer in big
+uppercase letters, and the "A" icon below.
 
-- one of **three layouts** from the AA design (Figma "Universal Video
-  Template"; see `aa-reels/assets/templates.png`)
-- the prayer in big uppercase letters, **one line per screen**. Each word blurs
-  in as it is spoken, and each line blurs out before the next.
+- **Template 1, line by line:** one line per screen. Each word blurs in as it
+  is spoken, and each line blurs out before the next. Long lines are split into
+  screens automatically, without changing any words.
+- **Template 2, whole prayer at once:** the full prayer stays on screen, still.
+  The size adjusts automatically to fit, up to Template 1's size (164 px).
 - words in `*stars*` get the **red accent tag**
 - the verse reference and the "A" icon blur in at the start and out at the end
-- a photo background zooms in and out very slowly; a video background loops
+- **several photos or videos** take turns with a soft dissolve (in Template 1,
+  during a pause between lines). Photos zoom in and out very slowly; videos loop.
 - optional **voiceover** (male or female) and optional calm **music**, both made
   on the spot, with no API keys, subscriptions or licensing
 
-![Templates 1, 2 and 3](aa-reels/assets/templates.png)
+![Templates 1 and 2](aa-reels/assets/templates.png)
 
-<img src="docs/example-template-3.jpg" width="270" alt="A frame from a finished reel: Template 3, with STRENGTH in the red tag">
+<img src="docs/example-template-2.jpg" width="270" alt="Template 2 with a long prayer, sized down to fit, PEACE in the red tag">
 
-*A frame from a finished reel: Template 3, Isaiah 41:10, `*strength*` highlighted.*
+*Template 2 with a long prayer (Philippians 4:6-7): the text shrinks to fit.*
 
 ## Install (for the client)
 
@@ -42,7 +46,7 @@ under **Organization settings**.
 ## The form
 
 ```
-Template: 1 / 2 / 3
+Template: 1 / 2
 Music: On / Off
 Voiceover: Yes / No
 Voice: Male / Female
@@ -54,10 +58,12 @@ Amen.
 Media Assets: Image / Video
 ```
 
-- **Text:** the verse reference goes on the first line, then the prayer, one
-  line per screen. Claude never changes the wording.
-- **`*stars*`** mark the highlighted word: a red tag in Templates 1 and 3, red
-  text in Template 2.
+- **Text:** the verse reference goes on the first line, then the prayer. In
+  Template 1 each line is one screen; lines over 9 words are split
+  automatically. Claude never changes the wording.
+- **`*stars*`** mark the highlighted word (the red tag).
+- **Media Assets:** attach one or more photos or videos (up to 10). They take
+  turns, in order.
 
 ## Timing and requirements
 
@@ -66,7 +72,7 @@ Media Assets: Image / Video
 | First video in a chat | about 2–3 minutes (sets itself up) |
 | Each change after that | about 1–2 minutes |
 | Network | npm and PyPI (allowed on every plan) and **github.com** (for the voice model). If github.com is blocked, videos still work with Voiceover: No. |
-| Video length | about 3 seconds per screen with voiceover |
+| Video length | Template 1: about 3 seconds per screen. Template 2: about 0.4 seconds per word, at least 6 seconds. |
 
 ## Repository layout
 
@@ -74,12 +80,13 @@ Media Assets: Image / Video
 aa-reels/                 the skill (this folder is what goes in the ZIP)
   SKILL.md                instructions Claude follows: form, rules, changes, errors
   assets/templates.png    the template picture shown to the user
-  scripts/make_reel.py    one command: setup, voice, music, render, loudness
+  scripts/make_reel.py    one command: setup, line splitting, voice, music, render, loudness
   scripts/gen_voice.py    Kokoro voiceover + word timing (local, free)
   scripts/gen_music.py    calm piano + strings, made from scratch
   project/                Remotion video project (React)
-    src/pray/templates.ts   the three layouts (positions and sizes from Figma)
-    src/pray/PhraseText.tsx word-by-word text, blur in/out, red tag
+    src/pray/templates.ts   the templates (positions and sizes from Figma); add new ones here
+    src/pray/PhraseText.tsx text layout and auto-size, word blur in/out, red tag
+    src/pray/Backgrounds.tsx several photos/videos, crossfades, slow zoom
     src/pray/timing.ts      animation timing constants
 dist/aa-reels.zip         ready-to-upload skill
 build.sh                  rebuilds dist/aa-reels.zip after changes
@@ -100,7 +107,7 @@ cat > /tmp/reel.json <<'EOF'
 {"template": 1, "music": true, "voiceover": true, "voice": "female",
  "reference": "Psalm 85:6", "phrases": ["Your faith may feel weak,", "Lord, *revive* us again", "Amen."]}
 EOF
-python3 aa-reels/scripts/make_reel.py --spec /tmp/reel.json --background photo.jpg --out reel.mp4
+python3 aa-reels/scripts/make_reel.py --spec /tmp/reel.json --background photo1.jpg clip.mp4 --out reel.mp4
 ```
 
 ## Credits and licences
@@ -115,4 +122,4 @@ python3 aa-reels/scripts/make_reel.py --spec /tmp/reel.json --background photo.j
   `aa-reels/project/public/fonts/`).
 - Music is generated from scratch by `gen_music.py`, so there are no samples
   and nothing to license.
-- Design: Awake America, Figma "AA Mobile App", section "Universal Video Template".
+- Design: Awake America, Figma "AA Mobile App", "Universal Template - Variant 1".
