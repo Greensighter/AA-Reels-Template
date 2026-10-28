@@ -39,7 +39,7 @@ Media Assets: Image
 ## Tips
 
 - **Two templates:** Template 1 shows the prayer line by line, as it's spoken.
-  Template 2 shows the whole prayer at once.
+  Template 2 shows the whole prayer at once, still, with no highlighted words.
 - **Verse first:** put the verse reference on the first line (for example,
   *Psalm 85:6*).
 - **Template 1: one line = one screen.** Short lines of 3 to 8 words look best.

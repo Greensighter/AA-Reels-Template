@@ -353,7 +353,12 @@ def build_props(spec: dict, backgrounds: list[str], voice_override: str | None) 
         raise SetupError(f"template must be one of: {', '.join(map(str, TEMPLATES))}.")
     if template not in TEMPLATES:
         raise SetupError(f"template must be one of: {', '.join(map(str, TEMPLATES))}.")
-    if spec.get("autoHighlight", True) is not False:
+    if TEMPLATES[template] == "static":
+        # Template 2 has no highlights: drop any *stars* so the voice and text are plain.
+        if any("*" in p for p in phrases):
+            log("Template 2 has no highlighted words; showing them as plain text.")
+        phrases = [p.replace("*", "") for p in phrases]
+    elif spec.get("autoHighlight", True) is not False:
         phrases, picked = auto_highlight(phrases)
         if picked:
             log(f"No highlighted word given; highlighting \"{picked}\".")
@@ -612,7 +617,7 @@ def main() -> None:
 
     if args.still:
         still = out.with_suffix(".png")
-        # First phrase, fully revealed and not yet leaving (static: the whole prayer, after it appears).
+        # First phrase, fully revealed and not yet leaving (static: the whole prayer, shown from the start).
         if TEMPLATES[props["template"]] == "static":
             frame = int(2.0 * 30)
         elif no_voice:

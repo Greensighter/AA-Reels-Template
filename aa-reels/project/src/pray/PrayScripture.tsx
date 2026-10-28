@@ -79,7 +79,8 @@ export const PrayScripture: React.FC<PrayInternalProps> = (props) => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [items.length, durationInFrames, spec.mode, props.timing]);
 
-  const v = chromeVisibility(t, total);
+  // Template 2 is fully still: header and icon are on screen from the first frame.
+  const v = spec.mode === 'static' ? 1 : chromeVisibility(t, total);
   const chrome: React.CSSProperties = { opacity: v, filter: v < 1 ? `blur(${WORD_BLUR * 0.75 * (1 - v)}px)` : undefined };
 
   return (
@@ -133,8 +134,8 @@ const PhrasePrayer: React.FC<{ phrases: PhraseTiming[]; spec: TemplateSpec; t: n
 };
 
 /**
- * Template 2: the whole prayer on one screen, still. It blurs in with the
- * header and icon, stays while the voice reads it, and blurs out at the end.
+ * Template 2: the whole prayer on one screen, completely still. No appearing or
+ * leaving animation, and no highlighted words (any *stars* are shown as plain text).
  * The size is the largest (up to the template's max) that fits between the
  * header and the icon.
  */
@@ -142,15 +143,13 @@ const StaticPrayer: React.FC<{ phrases: PhraseTiming[]; spec: TemplateSpec; t: n
   phrases,
   spec,
   t,
-  total,
 }) => {
   const words = useMemo(
-    () => forScreen(phrases.flatMap((p) => p.words)).map((w) => ({ ...w, start: CHROME_START + 0.15 })),
+    () => forScreen(phrases.flatMap((p) => p.words)).map((w) => ({ ...w, accent: false, start: -10 })),
     [phrases],
   );
   const box = spec.textBox;
-  const layout = useFit(words, { max: spec.fontSize, min: 40, tags: spec.accent === 'tag', maxHeightPx: box.bottom - box.top });
-  const out = interpolate(t, [total - CHROME_OUT - 0.15, total - 0.15], [0, 1], clamp);
+  const layout = useFit(words, { max: spec.fontSize, min: 40, tags: false, maxHeightPx: box.bottom - box.top });
   return (
     <TextBlock
       words={words}
@@ -158,8 +157,8 @@ const StaticPrayer: React.FC<{ phrases: PhraseTiming[]; spec: TemplateSpec; t: n
       centerY={(box.top + box.bottom) / 2}
       accent={spec.accent}
       t={t}
-      out={out}
-      inDuration={CHROME_IN}
+      out={0}
+      inDuration={0.01}
     />
   );
 };

@@ -13,13 +13,16 @@ overlay. The picture `assets/templates.png` shows both.
 
 - **Template 1, line by line:** one line of the prayer per screen. Each word
   blurs in as it is spoken, and each line blurs out before the next.
-- **Template 2, whole prayer at once:** the full prayer stays on screen, still,
-  while it is read. The text size adjusts automatically to fit: up to the same
-  size as Template 1 for a short prayer, smaller for a long one.
-- Words the user wraps in `*stars*` get the red accent tag. If they mark none,
-  you choose the key word(s).
+- **Template 2, whole prayer at once:** the full prayer is on screen, completely
+  still, from the first frame to the last while it is read: no appearing or
+  leaving animation, and **no highlighted words** (no red tag). The text size
+  adjusts automatically to fit: up to the same size as Template 1 for a short
+  prayer, smaller for a long one.
+- Template 1 only: words the user wraps in `*stars*` get the red accent tag. If
+  they mark none, you choose the key word(s).
 - Full stops are hidden on screen (other punctuation stays).
-- The verse and the "A" icon blur in at the start and out at the end.
+- Template 1: the verse and the "A" icon blur in at the start and out at the
+  end. Template 2: they are still, like the text.
 - **Backgrounds:** every attached photo and video is used, in order, taking
   turns with a soft dissolve. In Template 1 the change happens in a pause
   between lines. Photos zoom in and out very slowly; videos play muted and loop
@@ -62,7 +65,8 @@ Media Assets: Image / Video
    - Text: put the verse on the first line, then the prayer. In Template 1,
      **each line is one screen** (3 to 8 words looks best); long lines are split
      automatically.
-   - Put `*stars*` around a word to highlight it in red, like `*revive*`.
+   - Template 1: put `*stars*` around a word to highlight it in red, like
+     `*revive*`. Template 2 has no highlights.
    - You can attach **several photos or videos**: they'll take turns in the
      video. Vertical (portrait) ones look best.
 
@@ -101,7 +105,9 @@ If their first message already answers some of these, ask only for what's missin
 - A `*` without its partner: ask which word they meant to highlight.
 - **Full stops:** leave them in `phrases`. The video hides every "." on screen
   automatically, and the voice uses them to pause naturally between sentences.
-- **If there are no `*stars*` anywhere, choose the highlights yourself**: the
+- **Template 2: no highlights.** Don't add stars; if the user typed some, the
+  script shows those words as plain text. Mention it in one line.
+- **Template 1: if there are no `*stars*` anywhere, choose the highlights yourself**: the
   word (or two-word phrase) that carries the message, the one a preacher would
   stress. Use one highlight for a short prayer (up to about 5 screens) and 2–3
   for a longer one, never more than one per screen, spread out, with the

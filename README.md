@@ -11,7 +11,7 @@ uppercase letters, and the "A" icon below.
 - **Template 1, line by line:** one line per screen. Each word blurs in as it
   is spoken, and each line blurs out before the next. Long lines are split into
   screens automatically, without changing any words.
-- **Template 2, whole prayer at once:** the full prayer stays on screen, still.
+- **Template 2, whole prayer at once:** the full prayer is on screen, completely still from start to end, with no highlighted words.
   The size adjusts automatically to fit, up to Template 1's size (164 px).
 - words in `*stars*` get the **red accent tag**
 - the verse reference and the "A" icon blur in at the start and out at the end
