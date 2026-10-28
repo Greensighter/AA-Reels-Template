@@ -16,7 +16,9 @@ overlay. The picture `assets/templates.png` shows both.
 - **Template 2, whole prayer at once:** the full prayer stays on screen, still,
   while it is read. The text size adjusts automatically to fit: up to the same
   size as Template 1 for a short prayer, smaller for a long one.
-- Words the user wraps in `*stars*` get the red accent tag.
+- Words the user wraps in `*stars*` get the red accent tag. If they mark none,
+  you choose the key word(s).
+- Full stops are hidden on screen (other punctuation stays).
 - The verse and the "A" icon blur in at the start and out at the end.
 - **Backgrounds:** every attached photo and video is used, in order, taking
   turns with a soft dissolve. In Template 1 the change happens in a pause
@@ -92,6 +94,18 @@ If their first message already answers some of these, ask only for what's missin
   then evenly. It never changes words and never cuts a `*starred*` phrase. It
   prints the split, so show it to the user in a short list after the video.
 - A `*` without its partner: ask which word they meant to highlight.
+- **Full stops:** leave them in `phrases`. The video hides every "." on screen
+  automatically, and the voice uses them to pause naturally between sentences.
+- **If there are no `*stars*` anywhere, choose the highlights yourself**: the
+  word (or two-word phrase) that carries the message, the one a preacher would
+  stress. Use one highlight for a short prayer (up to about 5 screens) and 2–3
+  for a longer one, never more than one per screen, spread out, with the
+  strongest near the end. Prefer meaningful nouns and verbs ("*prayer*",
+  "*revive*", "*upside down*", "*peace*"). Avoid names of address ("Lord",
+  "God", "Jesus" at the start of a line), small words, and "Amen". Add the stars
+  around the existing word, without changing it, and tell the user in one line
+  which words you highlighted. (If none get through, the script highlights one
+  word as a safety net; your choice is better.)
 
 **Media:** uploaded files are in `/mnt/user-data/uploads/`; list that folder
 to find them. Pass **all** of them to `--background`, in the order the user
@@ -103,8 +117,9 @@ line, without stopping, when:
 - a photo is under about 1000 px wide: it will look a little soft;
 - there are many files for a short prayer: each gets only a few seconds.
 
-Then confirm in one line ("Template 1, music on, female voice, 2 photos:
-making it now") and go straight to step 3. Don't wait for approval.
+Then confirm in one line ("Template 1, music on, female voice, 2 photos,
+highlighting *prayer* and *upside down*: making it now") and go straight to
+step 3. Don't wait for approval.
 
 ## 3. Make the video
 
@@ -145,6 +160,7 @@ Change the spec and run the script again (about 1–2 minutes):
 | The other template | `"template"`: 1 or 2 |
 | Music / voice on or off, male or female | `"music"`, `"voiceover"`, `"voice"` |
 | Edit a line, or highlight a different word | `"phrases"`: use their wording exactly |
+| No highlights at all | remove the stars and add `"autoHighlight": false` |
 | Different screen breaks (Template 1) | put each screen as its own entry in `"phrases"`, as they want it |
 | Slower or faster voice | `"speed"`: default 0.76; 0.68 is slower, 0.85 is faster |
 | Different music | `"seed"`: any other number gives a new melody in the same calm style |

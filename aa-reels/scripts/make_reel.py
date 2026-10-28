@@ -15,7 +15,8 @@ prayer.json holds the intake answers:
 One phrase per screen in template 1; *stars* mark accent words (the red tag).
 Several --background files take turns with a crossfade (photos and videos can be mixed).
 Optional keys: "label" (default "Pray the scriptures"), "speed" (0.6-1.0), "seed" (music
-variation), "overlay", "zoom", "musicVolume".
+variation), "overlay", "zoom", "musicVolume", "autoHighlight" (false = never add a highlight).
+Full stops are hidden on screen automatically (the voice still pauses at them).
 
 First run sets everything up (about 1-2 minutes): Node packages, Python packages,
 the Kokoro voice model (~350 MB) and a headless browser. Later runs reuse them.
@@ -316,6 +317,10 @@ def build_props(spec: dict, backgrounds: list[str], voice_override: str | None) 
         raise SetupError(f"template must be one of: {', '.join(map(str, TEMPLATES))}.")
     if template not in TEMPLATES:
         raise SetupError(f"template must be one of: {', '.join(map(str, TEMPLATES))}.")
+    if spec.get("autoHighlight", True) is not False:
+        phrases, picked = auto_highlight(phrases)
+        if picked:
+            log(f"No highlighted word given; highlighting \"{picked}\".")
     voice = dict(DEFAULTS["voice"])
     name = str(voice_override or spec.get("voice") or "female").strip()
     voice["name"] = VOICES.get(name.lower(), name)
@@ -342,6 +347,48 @@ def build_props(spec: dict, backgrounds: list[str], voice_override: str | None) 
         "music": "audio/pray/music.wav",
         "musicVolume": float(spec.get("musicVolume", DEFAULTS["musicVolume"])),
     }
+
+
+# Safety net for highlights: Claude normally picks the accent word(s) itself (see SKILL.md).
+# If a prayer arrives with no *stars* at all, one word is highlighted automatically.
+KEY_WORDS = [
+    "prayer", "pray", "faith", "grace", "hope", "peace", "mercy", "love", "strength", "revive",
+    "revival", "healing", "heal", "joy", "light", "truth", "freedom", "rest", "trust", "glory",
+    "power", "victory", "courage", "salvation", "forgiven", "forgive", "blessing", "promise",
+    "jesus", "christ", "spirit",
+]
+
+
+def auto_highlight(phrases: list[str]) -> tuple[list[str], str | None]:
+    """Wraps one meaningful word in *stars* when none are marked. Returns (phrases, word)."""
+    if any("*" in p for p in phrases):
+        return phrases, None
+    tokens = [(i, j, tok) for i, p in enumerate(phrases) for j, tok in enumerate(p.split())]
+
+    def core(tok: str) -> str:
+        return re.sub(r"[^\w'’]", "", tok).lower()
+
+    pick = None
+    for key in KEY_WORDS:  # most meaningful first
+        hits = [t for t in tokens if core(t[2]) == key]
+        if hits:
+            pick = hits[-1]  # the later mention is usually the point of the prayer
+            break
+    if pick is None:  # otherwise the longest word (5+ letters) of the last real line
+        lines = [i for i, p in enumerate(phrases) if core(p) not in ("amen", "")]
+        last = lines[-1] if lines else len(phrases) - 1
+        cands = [t for t in tokens if t[0] == last and len(core(t[2])) >= 5]
+        pick = max(cands, key=lambda t: len(core(t[2]))) if cands else None
+    if pick is None:
+        return phrases, None
+    i, j, tok = pick
+    m = re.match(r"^([\"'“‘(]*)(.*?)([,.;:!?\"'”’)]*)$", tok)
+    lead, word, trail = m.groups() if m else ("", tok, "")
+    words = phrases[i].split()
+    words[j] = f"{lead}*{word}*{trail}"
+    out = list(phrases)
+    out[i] = " ".join(words)
+    return out, word
 
 
 MAX_WORDS_PER_SCREEN = 9

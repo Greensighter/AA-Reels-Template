@@ -61,7 +61,9 @@ Media Assets: Image / Video
 - **Text:** the verse reference goes on the first line, then the prayer. In
   Template 1 each line is one screen; lines over 9 words are split
   automatically. Claude never changes the wording.
-- **`*stars*`** mark the highlighted word (the red tag).
+- **`*stars*`** mark the highlighted word (the red tag). With no stars, Claude
+  picks the key word(s) itself (and the script highlights one word as a safety net).
+- Full stops are hidden on screen; the voice still pauses at them.
 - **Media Assets:** attach one or more photos or videos (up to 10). They take
   turns, in order.
 

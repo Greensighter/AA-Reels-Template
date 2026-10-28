@@ -45,7 +45,8 @@ Media Assets: Image
 - **Template 1: one line = one screen.** Short lines of 3 to 8 words look best.
   Longer lines are split for you; your words are never changed.
 - **Highlight a word** by putting stars around it: `*revive*`. It appears in
-  the red tag.
+  the red tag. If you don't mark any, Claude picks the key word for you.
+- Full stops aren't shown in the video, so you don't need to remove them.
 - **Several photos or videos?** Attach them all; they take turns in the video,
   in order.
 - **Vertical photos and videos** look best. Horizontal ones get cropped to the

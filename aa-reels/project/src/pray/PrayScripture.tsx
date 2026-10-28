@@ -30,6 +30,13 @@ const hasFile = (p?: string) => !!p && getStaticFiles().some((f) => f.name === p
 export const isVideo = (p: string) => /\.(mp4|mov|m4v|webm|mkv)$/i.test(p);
 
 const clamp = { extrapolateLeft: 'clamp', extrapolateRight: 'clamp' } as const;
+
+/**
+ * Words as shown on screen: full stops are removed ("WEAK." -> "WEAK"). The
+ * voice still reads the original text, so sentence endings keep their pause.
+ */
+const forScreen = (words: PhraseTiming['words']) =>
+  words.map((w) => ({ ...w, text: w.text.replace(/\./g, '') })).filter((w) => w.text.length > 0);
 const easeOut = Easing.out(Easing.cubic);
 const CHROME_START = 0.1;
 
@@ -111,7 +118,8 @@ const PhrasePrayer: React.FC<{ phrases: PhraseTiming[]; spec: TemplateSpec; t: n
 }) => {
   const idx = phrases.reduce((found, p, i) => (t >= p.start - 0.05 ? i : found), -1);
   const current = idx >= 0 ? phrases[idx] : null;
-  const layout = useFit(current?.words ?? [], { max: spec.fontSize, min: 90, tags: spec.accent === 'tag', maxLines: 4 });
+  const words = useMemo(() => forScreen(current?.words ?? []), [current]);
+  const layout = useFit(words, { max: spec.fontSize, min: 90, tags: spec.accent === 'tag', maxLines: 4 });
   if (!current) return null;
 
   const lastWordStart = current.words[current.words.length - 1]?.start ?? current.start;
@@ -121,7 +129,7 @@ const PhrasePrayer: React.FC<{ phrases: PhraseTiming[]; spec: TemplateSpec; t: n
   const outStart = Math.max(outEnd - outLen, lastWordStart + WORD_IN);
   const out = interpolate(t, [outStart, Math.max(outEnd, outStart + 0.01)], [0, 1], clamp);
 
-  return <TextBlock key={idx} words={current.words} layout={layout} centerY={spec.textCenterY} accent={spec.accent} t={t} out={out} />;
+  return <TextBlock key={idx} words={words} layout={layout} centerY={spec.textCenterY} accent={spec.accent} t={t} out={out} />;
 };
 
 /**
@@ -137,7 +145,7 @@ const StaticPrayer: React.FC<{ phrases: PhraseTiming[]; spec: TemplateSpec; t: n
   total,
 }) => {
   const words = useMemo(
-    () => phrases.flatMap((p) => p.words).map((w) => ({ ...w, start: CHROME_START + 0.15 })),
+    () => forScreen(phrases.flatMap((p) => p.words)).map((w) => ({ ...w, start: CHROME_START + 0.15 })),
     [phrases],
   );
   const box = spec.textBox;
