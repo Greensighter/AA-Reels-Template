@@ -1,0 +1,8 @@
+node_modules/
+__pycache__/
+*.pyc
+out/
+.DS_Store
+aa-reels/project/pray.json
+aa-reels/project/public/media/
+aa-reels/project/public/audio/
