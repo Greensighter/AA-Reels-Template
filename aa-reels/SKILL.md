@@ -83,6 +83,11 @@ If their first message already answers some of these, ask only for what's missin
 - **First line = the verse reference** when it looks like one ("Psalm 85:6",
   "John 3:16-17", "1 Peter 5:7"). Use it exactly as typed. If there is no
   reference, ask once; if they don't want one, leave it empty.
+- **A reference elsewhere in the text** (for example "— Matthew 19:14" under a
+  quote, or "(John 3:16)" at the end) is the verse reference: use it for the
+  top and drop that line from `phrases`, so it isn't shown or read aloud as a
+  screen. Tell the user in one line. If there are several, use the first and
+  leave the others in the text.
 - **Every other line goes into `phrases`** word for word, keeping their
   spelling, capitals, punctuation and `*stars*`. One entry per line they typed;
   a prayer written on a single line is one entry.

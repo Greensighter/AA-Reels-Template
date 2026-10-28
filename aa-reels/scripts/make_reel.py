@@ -220,6 +220,25 @@ def ensure_browser() -> tuple[str | None, list[str]]:
         )
 
 
+def available_memory_gb() -> float:
+    """Memory free for the render, from /proc/meminfo or the container limit (whichever is lower)."""
+    avail = 64.0
+    try:
+        for line in Path("/proc/meminfo").read_text().splitlines():
+            if line.startswith("MemAvailable:"):
+                avail = int(line.split()[1]) / 1024 / 1024
+    except OSError:
+        pass
+    for f in ("/sys/fs/cgroup/memory.max", "/sys/fs/cgroup/memory/memory.limit_in_bytes"):
+        try:
+            v = Path(f).read_text().strip()
+            if v.isdigit() and int(v) < 1 << 50:
+                avail = min(avail, int(v) / 1024 ** 3)
+        except OSError:
+            pass
+    return avail
+
+
 def ffmpeg_cmd() -> str:
     """System ffmpeg if present, else the one bundled with Remotion (always installed)."""
     return shutil.which("ffmpeg") or "npx remotion ffmpeg"
@@ -252,7 +271,7 @@ def loudnorm_filter(ff: str, media: Path) -> str:
 MAX_BACKGROUNDS = 10
 
 
-def place_backgrounds(sources: list[Path]) -> list[str]:
+def place_backgrounds(sources: list[Path], ff: str = "ffmpeg") -> list[str]:
     """Copies the user's photos/videos into the project, in order. Returns their public/ paths."""
     media = PROJECT / "public" / "media"
     shutil.rmtree(media, ignore_errors=True)
@@ -260,16 +279,33 @@ def place_backgrounds(sources: list[Path]) -> list[str]:
     if len(sources) > MAX_BACKGROUNDS:
         log(f"Note: using the first {MAX_BACKGROUNDS} of {len(sources)} files.")
         sources = sources[:MAX_BACKGROUNDS]
-    return [place_one(src, media, i + 1) for i, src in enumerate(sources)]
+    return [place_one(src, media, i + 1, ff) for i, src in enumerate(sources)]
 
 
-def place_one(src: Path, media: Path, n: int) -> str:
+def video_info(ff: str, src: Path) -> tuple[int, str]:
+    """(width, codec) of a video's first stream, read from ffmpeg's banner. (0, "") if unknown."""
+    res = subprocess.run([*ff.split(), "-hide_banner", "-i", str(src)], cwd=PROJECT, text=True, capture_output=True)
+    m = re.search(r"Video: (\w+).*?, (\d{2,5})x(\d{2,5})", res.stderr)
+    return (int(m.group(2)), m.group(1)) if m else (0, "")
+
+
+def place_one(src: Path, media: Path, n: int, ff: str = "ffmpeg") -> str:
     if not src.exists():
         raise SetupError(f"Background file not found: {src}")
     ext = src.suffix.lower()
     if ext in VIDEO_EXT:
-        dest = media / f"bg-{n}{ext}"
-        shutil.copy(src, dest)
+        width, codec = video_info(ff, src)
+        if width > 1200 or codec not in ("h264", ""):
+            # Phone/4K clips: shrink to 1080 wide H.264 (sharp enough for 1080x1920, much faster to
+            # render, and it also covers HEVC/ProRes files). Sound is dropped: backgrounds are muted.
+            dest = media / f"bg-{n}.mp4"
+            log(f"Preparing video {src.name} ({width}px {codec or '?'} -> 1080px H.264)...")
+            run([*ff.split(), "-y", "-loglevel", "error", "-i", str(src), "-an",
+                 "-vf", "scale='min(1080,iw)':-2", "-c:v", "libx264", "-preset", "veryfast", "-crf", "20",
+                 "-pix_fmt", "yuv420p", "-movflags", "+faststart", str(dest)], cwd=PROJECT, quiet=True)
+        else:
+            dest = media / f"bg-{n}{ext}"
+            shutil.copy(src, dest)
         return f"media/{dest.name}"
     # Images: normalise anything (HEIC, huge PNGs, odd colour modes) to a 2160px-tall JPEG.
     from PIL import Image, ImageOps
@@ -528,7 +564,7 @@ def main() -> None:
     ff = ffmpeg_cmd()
     scripts = SKILL / "scripts"
 
-    backgrounds = place_backgrounds([Path(b) for b in args.background])
+    backgrounds = place_backgrounds([Path(b) for b in args.background], ff)
     props = build_props(spec, backgrounds, args.voice)
     (PROJECT / "pray.json").write_text(json.dumps(props, indent=2))
 
@@ -562,7 +598,14 @@ def main() -> None:
              "--seconds", f"{voice_len + 1:.2f}", "--seed", str(seed)], cwd=PROJECT)
 
     cores = max(1, min(4, os.cpu_count() or 1))
-    common = ["--props=pray.json", f"--concurrency={cores}"] + (
+    flags = []
+    if any(Path(b).suffix.lower() in VIDEO_EXT for b in props["backgrounds"]):
+        # Video backgrounds: cap the decoded-frame cache (by default it can grow to half the RAM
+        # and get the renderer killed), and use one worker when memory is tight.
+        flags.append(f"--offthreadvideo-cache-size-in-bytes={256 * 1024 * 1024}")
+        if available_memory_gb() < 5:
+            cores = 1
+    common = ["--props=pray.json", f"--concurrency={cores}", *flags] + (
         [f"--browser-executable={browser}", *browser_flags] if browser else [])
     out = Path(args.out) if args.out else default_out(props)
     out.parent.mkdir(parents=True, exist_ok=True)
