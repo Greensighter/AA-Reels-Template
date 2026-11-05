@@ -22,9 +22,9 @@ uppercase letters, and the "A" icon below.
 
 ![Templates 1 and 2](aa-reels/assets/templates.png)
 
-<img src="docs/example-template-2.jpg" width="270" alt="Template 2 with a long prayer, sized down to fit, PEACE in the red tag">
+<img src="docs/example-template-2.jpg" width="270" alt="Template 2 with a long prayer, sized down to fit, no highlights">
 
-*Template 2 with a long prayer (Philippians 4:6-7): the text shrinks to fit.*
+*Template 2 with a long prayer (Philippians 4:6-7): the text shrinks to fit and stays still.*
 
 ## Install (for the client)
 
